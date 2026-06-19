@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Hunter Status</title>
+
+<!-- iOS home-screen / PWA meta -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Hunter Status" />
+<meta name="theme-color" content="#05070D" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+
+<style>
+  :root {
+    --bg: #05070D;
+    --panel: #0B1020;
+    --panelAlt: #0E1530;
+    --border: #1B2547;
+    --glow: #3DCBFF;
+    --glowDim: #1E4FB8;
+    --text: #F5F7FA;
+    --textDim: #7C88AD;
+    --gold: #FFB23D;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+  .display { font-family: 'Trebuchet MS', 'Arial Narrow', sans-serif; }
+  .mono { font-family: 'Courier New', monospace; }
+
+  #app {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: radial-gradient(circle at 50% 0%, #0A1228 0%, var(--bg) 55%);
+    display: flex;
+    justify-content: center;
+    padding: max(20px, env(safe-area-inset-top)) 12px 40px;
+    position: relative;
+  }
+  .scanlines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(to bottom, rgba(61,203,255,0.025) 0px, rgba(61,203,255,0.025) 1px, transparent 1px, transparent 3px);
+    mix-blend-mode: screen;
+    z-index: 0;
+  }
+  .shell { width: 100%; max-width: 480px; position: relative; z-index: 1; }
+
+  header.statuswin {
+    border: 1px solid var(--border);
+    background: linear-gradient(165deg, var(--panelAlt), var(--panel));
+    border-radius: 14px;
+    padding: 18px 16px 16px;
+    box-shadow: 0 0 0 1px rgba(61,203,255,0.06), 0 20px 40px -20px rgba(0,0,0,0.6);
+  }
+  .header-top { display: flex; justify-content: space-between; align-items: center; }
+  .badge-wrap { display: flex; align-items: center; gap: 12px; }
+  .badge {
+    width: 46px; height: 46px; border-radius: 10px;
+    border: 1px solid var(--glowDim);
+    background: rgba(61,203,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 22px; color: var(--glow);
+    text-shadow: 0 0 12px rgba(61,203,255,0.7);
+    flex-shrink: 0;
+  }
+  .hunter-label { font-size: 10px; letter-spacing: 0.12em; color: var(--textDim); }
+  .rank-name { font-size: 15px; font-weight: 600; margin-top: 1px; }
+  .week-selector { display: flex; align-items: center; gap: 6px; }
+  .week-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--textDim);
+    width: 26px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .week-label { font-size: 11px; color: var(--textDim); letter-spacing: 0.04em; white-space: nowrap; }
+  .week-label span { color: var(--glow); }
+
+  .xp-row { margin-top: 16px; }
+  .xp-bar-outer { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.06); overflow: hidden; border: 1px solid var(--border); }
+  .xp-bar-inner { height: 100%; background: linear-gradient(90deg, var(--glowDim), var(--glow)); box-shadow: 0 0 8px rgba(61,203,255,0.6); transition: width 0.4s ease; }
+  .xp-text { font-size: 10px; color: var(--textDim); margin-top: 5px; text-align: right; }
+
+  .rank-track { display: flex; align-items: center; margin-top: 16px; }
+  .rank-node {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--textDim);
+    flex-shrink: 0; background: var(--bg);
+  }
+  .rank-node.active { border-color: var(--glow); color: var(--glow); box-shadow: 0 0 10px rgba(61,203,255,0.6); }
+  .rank-node.done { border-color: var(--glowDim); color: var(--glow); background: rgba(61,203,255,0.12); }
+  .rank-connector { flex: 1; height: 1px; background: var(--border); }
+  .rank-connector.done { background: var(--glowDim); }
+
+  nav.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 14px; }
+  .tab-btn {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--textDim);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 4px; cursor: pointer;
+  }
+  .tab-btn.active { color: var(--glow); border-color: var(--glowDim); background: rgba(61,203,255,0.08); }
+  .tab-btn svg { margin-right: 5px; flex-shrink: 0; }
+
+  .day-row { display: flex; gap: 5px; margin-top: 12px; overflow-x: auto; padding-bottom: 2px; }
+  .day-pill {
+    flex: 1 0 auto; font-size: 11px; color: var(--textDim);
+    background: var(--panel); border: 1px solid var(--border); border-radius: 7px;
+    padding: 7px 9px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    white-space: nowrap;
+  }
+  .day-pill.active { color: var(--text); border-color: var(--glow); }
+  .day-pill.complete { color: var(--glow); background: rgba(61,203,255,0.08); }
+  .day-pill svg { margin-left: 4px; }
+
+  main { margin-top: 16px; }
+  .section-label {
+    display: flex; align-items: center; font-size: 11px; letter-spacing: 0.1em;
+    color: var(--textDim); margin-bottom: 10px; margin-top: 18px;
+  }
+  .section-label svg { margin-right: 7px; color: var(--glow); }
+
+  .quest-card { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 14px; }
+  .quest-card-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+  .quest-check-row {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 10px; cursor: pointer; font-size: 12.5px; color: var(--textDim); margin-bottom: 10px;
+    font-family: inherit;
+  }
+  .quest-check-row.done { border-color: var(--glowDim); color: var(--text); background: rgba(61,203,255,0.06); }
+  .checkbox {
+    width: 19px; height: 19px; border-radius: 5px; border: 1px solid var(--border);
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  }
+  .checkbox.checked { background: var(--glow); border-color: var(--glow); }
+  .quest-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .quest-list li { font-size: 12.5px; color: var(--textDim); line-height: 1.4; }
+
+  .meals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .meal-quest-card {
+    text-align: left; border: 1px solid var(--border); background: var(--panel);
+    border-radius: 10px; padding: 10px; cursor: pointer; font-family: inherit; color: inherit;
+    width: 100%;
+  }
+  .meal-quest-card.done { border-color: var(--glowDim); background: rgba(61,203,255,0.06); }
+  .meal-quest-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .meal-quest-icon { font-size: 16px; }
+  .meal-quest-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .meal-quest-time { font-size: 9.5px; color: var(--textDim); margin-top: 2px; }
+
+  .big-card { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 16px; }
+  .big-card-title { font-size: 18px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+  .exercise-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .exercise-item { display: flex; gap: 8px; font-size: 13.5px; color: var(--text); line-height: 1.4; }
+  .exercise-item svg { margin-top: 3px; flex-shrink: 0; color: var(--glow); }
+  .rest-note { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--textDim); line-height: 1.5; }
+
+  .meals-list-full { display: flex; flex-direction: column; gap: 10px; }
+  .meal-full-card { border: 1px solid var(--border); background: var(--panel); border-radius: 12px; padding: 14px; }
+  .meal-full-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .meal-full-label { font-size: 15px; font-weight: 600; }
+  .meal-options-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
+  .meal-options-list li { font-size: 12.5px; color: var(--textDim); line-height: 1.4; }
+  .tip-box { margin-top: 14px; border: 1px dashed var(--border); border-radius: 10px; padding: 12px; font-size: 12px; color: var(--textDim); line-height: 1.5; }
+
+  .timeline { display: flex; flex-direction: column; }
+  .timeline-row { display: flex; gap: 12px; }
+  .timeline-time-col { display: flex; flex-direction: column; align-items: center; width: 14px; }
+  .timeline-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--glowDim); border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--border); flex-shrink: 0; margin-top: 4px; }
+  .timeline-dot.highlight { background: var(--glow); box-shadow: 0 0 8px rgba(61,203,255,0.8); }
+  .timeline-dot.sleep { background: var(--gold); box-shadow: 0 0 8px rgba(255,178,61,0.7); }
+  .timeline-line { width: 1px; flex: 1; background: var(--border); margin: 2px 0; }
+  .timeline-content { padding-bottom: 18px; flex: 1; }
+  .timeline-time { font-size: 10.5px; color: var(--textDim); letter-spacing: 0.03em; }
+  .timeline-label { font-size: 13.5px; color: var(--text); margin-top: 2px; }
+  .timeline-label.highlight { color: var(--glow); font-weight: 600; }
+
+  footer { display: flex; align-items: center; justify-content: center; margin-top: 22px; font-size: 10px; color: var(--textDim); letter-spacing: 0.04em; padding-bottom: env(safe-area-inset-bottom); }
+  footer svg { margin-right: 6px; opacity: 0.6; }
+
+  .rankup-overlay {
+    position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
+    background: rgba(5,7,13,0.75); backdrop-filter: blur(3px);
+  }
+  .rankup-overlay.hidden { display: none; }
+  .rankup-box {
+    text-align: center; border: 1px solid var(--glow); background: var(--panel);
+    border-radius: 16px; padding: 32px 40px; box-shadow: 0 0 40px rgba(61,203,255,0.5);
+    max-width: 90vw;
+  }
+  .rankup-eyebrow { font-size: 11px; letter-spacing: 0.2em; color: var(--textDim); }
+  .rankup-title { font-size: 22px; font-weight: 700; color: var(--text); margin-top: 8px; letter-spacing: 0.05em; }
+  .rankup-rank { font-size: 56px; font-weight: 700; color: var(--glow); text-shadow: 0 0 24px rgba(61,203,255,0.9); margin-top: 6px; line-height: 1; }
+  .rankup-sub { font-size: 13px; color: var(--textDim); margin-top: 6px; }
+  .rankup-ok {
+    margin-top: 22px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+    color: var(--bg); background: var(--glow); border: none; border-radius: 8px;
+    padding: 10px 28px; cursor: pointer; box-shadow: 0 0 16px rgba(61,203,255,0.5);
+    font-family: inherit;
+  }
+  button { -webkit-appearance: none; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="scanlines" aria-hidden="true"></div>
+
+  <div class="rankup-overlay hidden" id="rankupOverlay">
+    <div class="rankup-box">
+      <div class="rankup-eyebrow">SYSTEM NOTIFICATION</div>
+      <div class="rankup-title">RANK UP</div>
+      <div class="rankup-rank" id="rankupRank">D-RANK</div>
+      <div class="rankup-sub" id="rankupSub">Trainee Hunter</div>
+      <button class="rankup-ok" id="rankupOk">OK</button>
+    </div>
+  </div>
+
+  <div class="shell">
+    <header class="statuswin">
+      <div class="header-top">
+        <div class="badge-wrap">
+          <div class="badge" id="rankBadge">E</div>
+          <div>
+            <div class="hunter-label">HUNTER STATUS</div>
+            <div class="rank-name" id="rankName">Awakened</div>
+          </div>
+        </div>
+        <div class="week-selector">
+          <button class="week-btn" id="weekPrev" aria-label="Previous week">‹</button>
+          <div class="week-label">WEEK <span id="weekNum">1</span> / 13</div>
+          <button class="week-btn" id="weekNext" aria-label="Next week">›</button>
+        </div>
+      </div>
+
+      <div class="xp-row">
+        <div class="xp-bar-outer"><div class="xp-bar-inner" id="xpBar" style="width:0%"></div></div>
+        <div class="xp-text"><span id="xpPct">0</span>% this week</div>
+      </div>
+
+      <div class="rank-track" id="rankTrack"></div>
+    </header>
+
+    <nav class="tabs" id="tabs"></nav>
+
+    <div class="day-row" id="dayRow"></div>
+
+    <main id="main"></main>
+
+    <footer>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>
+      Arise. The grind compounds — 13 weeks to S-Rank.
+    </footer>
+  </div>
+</div>
+
+<script>
+// ---------------- Data ----------------
+const RANKS = ["E","D","C","B","A","S"];
+const RANK_NAMES = {E:"Awakened",D:"Trainee Hunter",C:"Mid-Tier Hunter",B:"Elite Hunter",A:"National-Level Candidate",S:"Shadow Monarch"};
+function rankForWeek(week){
+  if(week<=2) return 0;
+  if(week<=4) return 1;
+  if(week<=7) return 2;
+  if(week<=9) return 3;
+  if(week<=11) return 4;
+  return 5;
+}
+const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const WORKOUTS = {
+  Mon: { title:"PUSH — Chest / Shoulders / Triceps", items:[
+    "Push-ups (standard) — 4×12-15","Wide push-ups — 3×10-12","Diamond push-ups — 3×8-10",
+    "Pike push-ups — 3×10","Tricep dips (chair/bed edge) — 3×12"
+  ]},
+  Tue: { title:"PULL — Back / Biceps", items:[
+    "Superman holds — 4×15-20s","Reverse snow angels — 3×15","Towel rows (door anchor) — 3×12",
+    "Doorframe rows — 3×12","Bird-dogs — 3×10/side"
+  ]},
+  Wed: { title:"REST DAY", rest:true, items:["Light walk optional","Stretch / mobility 10 min","Recovery — let the muscle build"] },
+  Thu: { title:"LEGS + CORE", items:[
+    "Bodyweight squats — 4×20","Lunges — 3×12/leg","Glute bridges — 3×15","Wall sit — 3×30-40s","Plank — 3×45-60s"
+  ]},
+  Fri: { title:"ABS FOCUS", items:[
+    "Plank — 3×45-60s","Bicycle crunches — 3×20","Leg raises — 3×12","Russian twists — 3×20",
+    "Mountain climbers — 3×30s","Hollow body hold — 3×20-30s"
+  ]},
+  Sat: { title:"FULL BODY + CARDIO", items:[
+    "Burpees — 4×10","Push-ups — 3×12","Squat jumps — 3×15","Plank to push-up — 3×10","Brisk walk/jog — 10-15 min"
+  ]},
+  Sun: { title:"REST DAY", rest:true, items:["Light walk optional","Stretch / mobility 10 min","Recovery — let the muscle build"] },
+};
+const MEALS = [
+  { key:"breakfast", time:"8:15 AM", label:"Breakfast", kcal:"~450 kcal", icon:"🌅", options:[
+    "Oats (60g) in milk + 3 whole eggs + banana","Besan chilla (2) + curd + 1 boiled egg","Poha with peanuts + 2 boiled eggs"
+  ]},
+  { key:"lunch", time:"10:00 AM", label:"Lunch (pre-shift)", kcal:"~700 kcal", icon:"🍛", options:[
+    "Grilled chicken breast (200g) + rice (1 cup) + sautéed veg","Fish curry (200g) + brown rice + dal",
+    "Lentil-rajma mix + paneer (100g) + roti (2) + salad","Turkey/chicken mince bhurji + roti + vegetables"
+  ]},
+  { key:"snack1", time:"~3:00 PM", label:"Desk Snack I", kcal:"~250 kcal", icon:"🥜", options:[
+    "Roasted chana + a fruit","Curd + nuts (handful almonds/walnuts)","Protein shake + banana"
+  ]},
+  { key:"snack2", time:"~7:30 PM", label:"Desk Snack II", kcal:"~500 kcal", icon:"🌙", options:[
+    "Egg sandwich (2 eggs, whole wheat) + cucumber","Chicken/paneer wrap (whole wheat) + vegetables","Sprouts salad + boiled eggs (2) + peanuts"
+  ]},
+  { key:"late", time:"12:30 AM", label:"Late Arrival (light)", kcal:"~100 kcal", icon:"🛡️", options:[
+    "Curd / buttermilk","Small handful of nuts","Skip if not hungry — don't force it"
+  ]},
+];
+const SCHEDULE = [
+  {time:"8:00 AM", label:"Wake — water, light stretch"},
+  {time:"8:15 AM", label:"Breakfast"},
+  {time:"8:45–9:30 AM", label:"Workout (45 min)"},
+  {time:"9:30–10:00 AM", label:"Shower, get ready"},
+  {time:"10:00–11:00 AM", label:"Lunch + buffer time"},
+  {time:"11:00–11:45 AM", label:"Pack snacks, prep, free time"},
+  {time:"12:00 PM", label:"Leave for work", highlight:true},
+  {time:"~3:00 PM", label:"Desk Snack I"},
+  {time:"~7:30 PM", label:"Desk Snack II"},
+  {time:"12:00–12:30 AM", label:"Arrive home", highlight:true},
+  {time:"12:30–1:00 AM", label:"Wind down, light snack, shower"},
+  {time:"1:00 AM", label:"Sleep", sleep:true},
+  {time:"8:00 AM", label:"Wake (7 hrs sleep)", sleep:true},
+];
+const TOTAL_WEEKS = 13;
+
+// ---------------- State (persisted via localStorage) ----------------
+const STORAGE_CHECKS = "sl-tracker-checks";
+const STORAGE_WEEK = "sl-tracker-week";
+const STORAGE_PREV_RANK = "sl-tracker-prev-rank";
+
+let checks = {};
+let week = 1;
+let activeDay = DAYS[0];
+let tab = "quest";
+
+try { checks = JSON.parse(localStorage.getItem(STORAGE_CHECKS) || "{}"); } catch(e) { checks = {}; }
+try { week = Number(localStorage.getItem(STORAGE_WEEK)) || 1; } catch(e) { week = 1; }
+let prevRankIdx = (() => {
+  const v = localStorage.getItem(STORAGE_PREV_RANK);
+  return v === null ? rankForWeek(week) : Number(v);
+})();
+
+function saveChecks(){ localStorage.setItem(STORAGE_CHECKS, JSON.stringify(checks)); }
+function saveWeek(){ localStorage.setItem(STORAGE_WEEK, String(week)); }
+function savePrevRank(idx){ localStorage.setItem(STORAGE_PREV_RANK, String(idx)); prevRankIdx = idx; }
+
+function todayKey(w,d){ return `w${w}-${d}`; }
+function getDayData(w,d){ return checks[todayKey(w,d)] || { workout:false, meals:{} }; }
+
+function toggleWorkout(){
+  const key = todayKey(week, activeDay);
+  const cur = checks[key] || { workout:false, meals:{} };
+  checks[key] = { ...cur, workout: !cur.workout };
+  saveChecks();
+  renderAll();
+}
+function toggleMeal(mealKey){
+  const key = todayKey(week, activeDay);
+  const cur = checks[key] || { workout:false, meals:{} };
+  const meals = { ...cur.meals, [mealKey]: !cur.meals[mealKey] };
+  checks[key] = { ...cur, meals };
+  saveChecks();
+  renderAll();
+}
+
+function weekProgress(){
+  let total=0, done=0;
+  DAYS.forEach(d=>{
+    const isRest = WORKOUTS[d].rest;
+    const c = getDayData(week, d);
+    if(!isRest){ total+=1; if(c.workout) done+=1; }
+    MEALS.forEach(m=>{ total+=1; if(c.meals && c.meals[m.key]) done+=1; });
+  });
+  return total===0 ? 0 : Math.round((done/total)*100);
+}
+
+// ---------------- Icons (inline SVG, lucide-style) ----------------
+const ICONS = {
+  scroll: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/></svg>`,
+  dumbbell: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.4 14.4 9.6 9.6"/><path d="M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z"/><path d="m21.5 21.5-1.4-1.4"/><path d="M3.9 3.9 2.5 2.5"/><path d="M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z"/></svg>`,
+  utensils: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/><path d="M7 2v6a2 2 0 0 0 2 2h0"/><path d="M11 2v9"/><path d="M7 2a4 4 0 0 0-4 4v3a4 4 0 0 0 4 4"/></svg>`,
+  moon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>`,
+  chevron: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>`,
+  check: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#05070D" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>`,
+  checkDim: `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>`,
+};
+
+// ---------------- Render ----------------
+function renderHeader(){
+  const rankIdx = rankForWeek(week);
+  const rank = RANKS[rankIdx];
+  document.getElementById('rankBadge').textContent = rank;
+  document.getElementById('rankName').textContent = RANK_NAMES[rank];
+  document.getElementById('weekNum').textContent = week;
+  const pct = weekProgress();
+  document.getElementById('xpBar').style.width = pct + '%';
+  document.getElementById('xpPct').textContent = pct;
+
+  const track = document.getElementById('rankTrack');
+  track.innerHTML = '';
+  RANKS.forEach((r,i)=>{
+    const node = document.createElement('div');
+    node.className = 'rank-node' + (i===rankIdx?' active':'') + (i<rankIdx?' done':'');
+    node.textContent = r;
+    track.appendChild(node);
+    if(i < RANKS.length-1){
+      const conn = document.createElement('div');
+      conn.className = 'rank-connector' + (i<rankIdx?' done':'');
+      track.appendChild(conn);
+    }
+  });
+
+  // rank-up detection
+  if(rankIdx > prevRankIdx){
+    document.getElementById('rankupRank').textContent = rank + '-RANK';
+    document.getElementById('rankupSub').textContent = RANK_NAMES[rank];
+    document.getElementById('rankupOverlay').classList.remove('hidden');
+    savePrevRank(rankIdx);
+  } else if(rankIdx !== prevRankIdx){
+    savePrevRank(rankIdx);
+  }
+}
+
+function renderTabs(){
+  const tabsEl = document.getElementById('tabs');
+  const defs = [
+    {id:'quest', label:'Daily Quest', icon:ICONS.scroll},
+    {id:'workout', label:'Workouts', icon:ICONS.dumbbell},
+    {id:'meals', label:'Meal Plan', icon:ICONS.utensils},
+    {id:'schedule', label:'Schedule', icon:ICONS.moon},
+  ];
+  tabsEl.innerHTML = '';
+  defs.forEach(d=>{
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (tab===d.id?' active':'');
+    btn.innerHTML = d.icon + d.label;
+    btn.onclick = () => { tab = d.id; renderAll(); };
+    tabsEl.appendChild(btn);
+  });
+}
+
+function renderDayRow(){
+  const dayRow = document.getElementById('dayRow');
+  if(tab === 'schedule'){ dayRow.style.display = 'none'; return; }
+  dayRow.style.display = 'flex';
+  dayRow.innerHTML = '';
+  DAYS.forEach(d=>{
+    const c = getDayData(week, d);
+    const mealsDone = MEALS.filter(m => c.meals && c.meals[m.key]).length;
+    const wDone = WORKOUTS[d].rest ? true : c.workout;
+    const full = wDone && mealsDone === MEALS.length;
+    const btn = document.createElement('button');
+    btn.className = 'day-pill' + (activeDay===d?' active':'') + (full?' complete':'');
+    btn.innerHTML = d + (full ? ICONS.checkDim : '');
+    btn.onclick = () => { activeDay = d; renderAll(); };
+    dayRow.appendChild(btn);
+  });
+}
+
+function renderQuestTab(){
+  const workout = WORKOUTS[activeDay];
+  const dayData = getDayData(week, activeDay);
+  const isRestDay = !!workout.rest;
+
+  let html = `<div class="section-label">${ICONS.dumbbell}${isRestDay?'RECOVERY':'TRAINING QUEST'}</div>`;
+  html += `<div class="quest-card">
+    <div class="quest-card-title">${workout.title}</div>
+    <button class="quest-check-row${dayData.workout?' done':''}" id="workoutToggle">
+      <span class="checkbox${dayData.workout?' checked':''}">${dayData.workout?ICONS.check:''}</span>
+      <span>${isRestDay?'Mark recovery day complete':'Mark workout complete'}</span>
+    </button>
+    <ul class="quest-list">${workout.items.map(it=>`<li>${it}</li>`).join('')}</ul>
+  </div>`;
+
+  html += `<div class="section-label">${ICONS.utensils}NUTRITION QUEST</div>`;
+  html += `<div class="meals-grid">`;
+  MEALS.forEach(m=>{
+    const done = dayData.meals && dayData.meals[m.key];
+    html += `<button class="meal-quest-card${done?' done':''}" data-meal="${m.key}">
+      <div class="meal-quest-top">
+        <span class="meal-quest-icon">${m.icon}</span>
+        <span class="checkbox${done?' checked':''}">${done?ICONS.check:''}</span>
+      </div>
+      <div class="meal-quest-label">${m.label}</div>
+      <div class="meal-quest-time">${m.time} · ${m.kcal}</div>
+    </button>`;
+  });
+  html += `</div>`;
+
+  document.getElementById('main').innerHTML = html;
+  document.getElementById('workoutToggle').onclick = toggleWorkout;
+  document.querySelectorAll('.meal-quest-card').forEach(el=>{
+    el.onclick = () => toggleMeal(el.getAttribute('data-meal'));
+  });
+}
+
+function renderWorkoutTab(){
+  const workout = WORKOUTS[activeDay];
+  let html = `<div class="section-label">${ICONS.dumbbell}${activeDay.toUpperCase()} — TRAINING LOG</div>`;
+  html += `<div class="big-card">
+    <div class="big-card-title">${workout.title}</div>
+    <ol class="exercise-list">${workout.items.map(it=>`<li class="exercise-item">${ICONS.chevron}<span>${it}</span></li>`).join('')}</ol>
+    ${workout.rest ? `<div class="rest-note">Recovery is part of the build. Skipping rest days slows muscle growth — the System rewards patience as much as effort.</div>` : ''}
+  </div>`;
+  document.getElementById('main').innerHTML = html;
+}
+
+function renderMealsTab(){
+  let html = `<div class="section-label">${ICONS.utensils}DAILY RATION PLAN · ~2,000 KCAL / 150G PROTEIN</div>`;
+  html += `<div class="meals-list-full">`;
+  MEALS.forEach(m=>{
+    html += `<div class="meal-full-card">
+      <div class="meal-full-header">
+        <span class="meal-quest-icon">${m.icon}</span>
+        <div>
+          <div class="meal-full-label">${m.label}</div>
+          <div class="meal-quest-time">${m.time} · ${m.kcal}</div>
+        </div>
+      </div>
+      <ul class="meal-options-list">${m.options.map(o=>`<li>${o}</li>`).join('')}</ul>
+    </div>`;
+  });
+  html += `</div>`;
+  html += `<div class="tip-box">Protein at every meal protects muscle while cutting. Water: 3–3.5L/day. No sugary drinks — black coffee/tea is fine.</div>`;
+  document.getElementById('main').innerHTML = html;
+}
+
+function renderScheduleTab(){
+  let html = `<div class="section-label">${ICONS.moon}24-HOUR CYCLE · 7 HOURS SLEEP LOCKED IN</div>`;
+  html += `<div class="timeline">`;
+  SCHEDULE.forEach((s,i)=>{
+    html += `<div class="timeline-row">
+      <div class="timeline-time-col">
+        <div class="timeline-dot${s.highlight?' highlight':''}${s.sleep?' sleep':''}"></div>
+        ${i < SCHEDULE.length-1 ? '<div class="timeline-line"></div>' : ''}
+      </div>
+      <div class="timeline-content">
+        <div class="timeline-time">${s.time}</div>
+        <div class="timeline-label${s.highlight?' highlight':''}">${s.label}</div>
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+  document.getElementById('main').innerHTML = html;
+}
+
+function renderMain(){
+  if(tab==='quest') renderQuestTab();
+  else if(tab==='workout') renderWorkoutTab();
+  else if(tab==='meals') renderMealsTab();
+  else if(tab==='schedule') renderScheduleTab();
+}
+
+function renderAll(){
+  renderHeader();
+  renderTabs();
+  renderDayRow();
+  renderMain();
+}
+
+// ---------------- Wiring ----------------
+document.getElementById('weekPrev').onclick = () => { week = Math.max(1, week-1); saveWeek(); renderAll(); };
+document.getElementById('weekNext').onclick = () => { week = Math.min(TOTAL_WEEKS, week+1); saveWeek(); renderAll(); };
+
+const overlay = document.getElementById('rankupOverlay');
+function closeOverlay(){ overlay.classList.add('hidden'); }
+document.getElementById('rankupOk').onclick = closeOverlay;
+overlay.onclick = (e) => { if(e.target === overlay) closeOverlay(); };
+
+renderAll();
+
+// ---------------- Service worker registration (offline support) ----------------
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
